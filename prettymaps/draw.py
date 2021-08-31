@@ -13,7 +13,7 @@ from tabulate import tabulate
 from IPython.display import Markdown, display
 
 from .fetch import get_perimeter, get_layer
-
+from concurrent.futures import ThreadPoolExecutor
 
 # Helper functions
 def get_hash(key):
@@ -173,14 +173,19 @@ def plot(
             }
 
         # Fetch layers
-        layers = {
-            layer: get_layer(
-                layer,
-                **base_kwargs,
-                **(kwargs if type(kwargs) == dict else {})
-            )
-            for layer, kwargs in layers.items()
-        }
+        futures = {}
+        with ThreadPoolExecutor(max_workers = len(layers)) as executor:
+            for layer, kwargs in layers.items():
+                futures[layer] = executor.submit(
+                    get_layer,
+                    layer,
+                    **base_kwargs,
+                    **(kwargs if type(kwargs) == dict else {})
+                )
+
+            layers = {}
+            for layer, future in futures.items():
+                layers[layer] = future.result()
 
         # Apply transformation to layers (translate & scale)
         layers = transform(layers, x, y, scale_x, scale_y, rotation)
